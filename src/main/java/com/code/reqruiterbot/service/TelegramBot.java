@@ -48,7 +48,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final Map<Long, Long> lastMessageTimes = new ConcurrentHashMap<>();
     private final Map<Long, Integer> messageCountPerMinute = new ConcurrentHashMap<>();
     private final int maxMessagesPerMinute = 10;
-    private long currentRecruiterChatId = -1; // Используйте значение по умолчанию, которое не используется
+    private long currentRecruiterChatId = -1;
 
     @Autowired
     public TelegramBot(BotConfig config, BlackListRepository blackListRepository, VacancyRepository vacancyRepository, UserRepository userRepository) {
