@@ -48,6 +48,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final Map<Long, Long> lastMessageTimes = new ConcurrentHashMap<>();
     private final Map<Long, Integer> messageCountPerMinute = new ConcurrentHashMap<>();
     private final int maxMessagesPerMinute = 10;
+    private long currentRecruiterChatId = -1; // Используйте значение по умолчанию, которое не используется
 
     @Autowired
     public TelegramBot(BotConfig config, BlackListRepository blackListRepository, VacancyRepository vacancyRepository, UserRepository userRepository) {
@@ -204,8 +205,13 @@ public class TelegramBot extends TelegramLongPollingBot {
                     String savePath = "D:/CV from reqbot/" + fileName;
                     saveFileLocally(localFile, savePath, chatId);
 
-                    // Отправьте файл рекрутеру
-                    sendFileToRecruiter(chatId, fileId, fileName);
+                    // Проверяем, есть ли значения для currentRecruiterChatId, fileId и fileName
+                    if (currentRecruiterChatId > 0 && fileId != null && fileName != null) {
+                        // Отправляем файл рекрутеру
+                        sendFileToRecruiter(currentRecruiterChatId, fileId, fileName);
+                    } else {
+                        sendMessage(chatId, "Произошла ошибка при отправке файла.");
+                    }
                 } catch (TelegramApiException | IOException e) {
                     log.error("Exception thrown while sending file to recruiter: " + e);
                     sendMessage(chatId, "Произошла ошибка при отправке файла.");
@@ -270,7 +276,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
     private void sendFileToRecruiter(long recruiterChatId, String fileId, String fileName) {
         SendDocument sendDocument = new SendDocument();
-        sendDocument.setChatId(Long.toString(recruiterChatId)); //тут не верно-----------------------------------------------------------------------------------
+        sendDocument.setChatId(Long.toString(recruiterChatId));
         InputFile inputFile = new InputFile(fileId);
         sendDocument.setDocument(inputFile);
         sendDocument.setCaption(fileName);
@@ -321,27 +327,28 @@ public class TelegramBot extends TelegramLongPollingBot {
             log.error("Error occurred while sending message with inline keyboard: " + e);
         }
     }
-    private void handleResumeSubmission(long chatId, int vacancyId) { //РЕЗУЛЬТАТ НАЖАТИЯ КНОПКИ-------------------3
-        //информация о вакансии и рекрутере на основе vacancyId
+    private void handleResumeSubmission(long chatId, int vacancyId) {
+        // Информация о вакансии и рекрутере на основе vacancyId
         Vacancy vacancy = vacancyRepository.findByVacancyId(vacancyId);
 
         if (vacancy != null) {
-            //chatId рекрутера из vacancy
+            // ChatId рекрутера из vacancy
             long recruiterChatId = vacancy.getRecruiterChatId();
             log.info("Recruiter's chatId got " + recruiterChatId);
             if (recruiterChatId > 0) {
+                currentRecruiterChatId = recruiterChatId; // Устанавливаем значение currentRecruiterChatId
                 String responseMessage = "Пожалуйста, отправьте свое резюме, и я передам его рекрутеру.";
                 sendMessage(chatId, responseMessage);
-                log.info("pushed button by user " + chatId);
+                log.info("Pushed button by user " + chatId);
             } else {
                 String errorMessage = "Извините, не удалось найти рекрутера для этой вакансии.";
                 sendMessage(chatId, errorMessage);
-                log.info("cant find recruiter " + chatId);
+                log.info("Can't find recruiter " + chatId);
             }
         } else {
             String errorMessage = "Извините, не удалось найти вакансию с выбранным ID.";
             sendMessage(chatId, errorMessage);
-            log.info("cant find vacancie " + chatId);
+            log.info("Can't find vacancy " + chatId);
         }
     }
     private void register(long chatId) {
