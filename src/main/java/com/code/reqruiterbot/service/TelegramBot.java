@@ -38,16 +38,15 @@ public class TelegramBot extends TelegramLongPollingBot {
     static final String INFO_TEXT = "Этот бот создан для помощи работникам в сфере IT в трудоустройстве " +
     "а так же небольшого облегчения работы рекрутеру. Пожалуйста, ознакомьтесь с меню " +
     "и выберите нужный вам пункт.\n";
-    static final String ABOUT_ME = "Приветствую! Я — телеграм-бот от команды qazdev, созданный, чтобы стать твоим надежным " +
-            "помощником в поиске интересной работы. С моей помощью ты можешь:\n" +
-            "\n" +
-            "Ознакомиться с актуальными вакансиями нашей компании.\n" +
-            "Подписаться на рассылку, чтобы первым узнавать о новых открытых позициях.\n" +
-            "Отправить свое резюме прямиком в руки наших HR-специалистов.\n" +
-            "Давай вместе найдем для тебя идеальное место в нашей команде! \uD83D\uDE80";
+    static final String ABOUT_ME = """
+            Приветствую! Я — телеграм-бот от команды qazdev, созданный, чтобы стать твоим надежным помощником в поиске интересной работы. С моей помощью ты можешь:
+
+            Ознакомиться с актуальными вакансиями нашей компании.
+            Подписаться на рассылку, чтобы первым узнавать о новых открытых позициях.
+            Отправить свое резюме прямиком в руки наших HR-специалистов.
+            Давай вместе найдем для тебя идеальное место в нашей команде! \uD83D\uDE80""";
     private final Map<Long, Long> lastMessageTimes = new ConcurrentHashMap<>();
     private final Map<Long, Integer> messageCountPerMinute = new ConcurrentHashMap<>();
-    private final int maxMessagesPerMinute = 10;
     private long currentRecruiterChatId = -1;
 
     @Autowired
@@ -75,6 +74,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             long lastMessageTime = lastMessageTimes.getOrDefault(chatId, 0L);
             if (currentTimeMillis - lastMessageTime < 60000) {
                 int messageCount = messageCountPerMinute.getOrDefault(chatId, 0);
+                int maxMessagesPerMinute = 10;
                 if (messageCount >= maxMessagesPerMinute) {
                     sendMessage(chatId, "Превышено максимальное количество сообщений в минуту.");
                     sendMessage(1631579869, "полундра, меня пытаются заспамить " + chatId);
@@ -88,49 +88,39 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (existingUser.isPresent()) {
                 sendMessage(chatId, "   ");
                 return;
-            } if (messageText.contains("/send") && config.getOwnerId() == chatId) {
+            } if (messageText.contains("/send") && isChatIdBotOwner(config.getBotOwners(), chatId)) {
                 var textToSend =messageText.substring(messageText.indexOf(" "));
                 var users = userRepository.findAll();
                 for (User user : users) {
                     sendMessage(user.getChatId(), textToSend);
                 }
                 log.info(chatId + "sended message to all by ADMIN");
-            } else if (messageText.contains("/adddb") && config.getOwnerId() == chatId) {
+            } else if (messageText.contains("/adddb") && isChatIdBotOwner(config.getBotOwners(), chatId)) {
                 addNewVacancy(update);
-            } else if (messageText.contains("/removedb") && config.getOwnerId() == chatId) {
+            } else if (messageText.contains("/removedb") && isChatIdBotOwner(config.getBotOwners(), chatId)) {
                 removeVacancy(update);
-            } else if (messageText.startsWith("/addbl") && config.getOwnerId() == chatId) {
+            } else if (messageText.startsWith("/addbl") && isChatIdBotOwner(config.getBotOwners(), chatId)) {
                 processAddToBlackListCommand(update.getMessage());
-            } else if (messageText.startsWith("/removebl") && config.getOwnerId() == chatId) {
+            } else if (messageText.startsWith("/removebl") && isChatIdBotOwner(config.getBotOwners(), chatId)) {
                 processRemoveFromBlackListCommand(update.getMessage());
             } else {
                 switch (messageText) {
-                    case "/start":
-                        startCommandReceived(chatId, update.getMessage().getChat().getFirstName());
-                        break;
-                    case "/info":
+                    case "/start" -> startCommandReceived(chatId, update.getMessage().getChat().getFirstName());
+                    case "/info" -> {
                         sendMessage(chatId, INFO_TEXT);
                         log.info(chatId + "requested info");
-                        break;
-                    case "/register":
+                    }
+                    case "/register" -> {
                         if (userRepository.findById(chatId).isEmpty()) {
                             register(chatId);
                         } else {
                             sendMessage(chatId, "Вы уже зарегистрированы.");
                         }
-                        break;
-                    case "/forgetme":
-                        deleteUser(update.getMessage());
-                        break;
-                    case "Доступные вакансии":
-                        handleVacanciesButton(chatId);
-                        break;
-                    case "Обо мне":
-                        sendMessage(chatId, ABOUT_ME);
-                        break;
-                    default:
-                        sendMessage(chatId, "Данной команды не существует");
-                        break;
+                    }
+                    case "/forgetme" -> deleteUser(update.getMessage());
+                    case "Доступные вакансии" -> handleVacanciesButton(chatId);
+                    case "Обо мне" -> sendMessage(chatId, ABOUT_ME);
+                    default -> sendMessage(chatId, "Данной команды не существует");
                 }
             }
             lastMessageTimes.put(chatId, currentTimeMillis);
@@ -149,7 +139,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     String[] parts = callBackData.split("_");
                     if (parts.length == 3) {
                         int vacancyId = Integer.parseInt(parts[2]);
-                        log.info("Callback for vacancyId: " + vacancyId); // Добавьте эту строку для логирования
+                        log.info("Callback for vacancyId: " + vacancyId + " by user " + chatId);
 
                         handleResumeSubmission(chatId, vacancyId);
                     } else {
@@ -187,7 +177,14 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
         }
     }
-
+    public boolean isChatIdBotOwner(List<Long> botOwners, long chatId) {
+        for (Long owner : botOwners) {
+            if (owner == chatId) {
+                return true;
+            }
+        }
+        return false;
+    }
     private void handleDocumentMessage(Message message, long chatId) {
         Document document = message.getDocument();
         String fileId = document.getFileId();
@@ -287,32 +284,43 @@ public class TelegramBot extends TelegramLongPollingBot {
             log.error("Exception thrown while sending to recruiter: " + e);
         }
     }
+    private boolean isUserRegistered(long chatId) {
+        User user = userRepository.findByChatId(chatId);
+        return user != null;
+    }
     private void handleVacanciesButton(long chatId) { //ТЫКАЕМ КНОПКУ показать ВАКАНСИЮ------------------------------1
         List<Vacancy> vacancies = vacancyRepository.findAll();
-        if (!vacancies.isEmpty()) {
-            for (Vacancy vacancy : vacancies) {
-                String callbackData = "select_vacancy_" + vacancy.getVacancyId();
-                InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-                InlineKeyboardButton button = new InlineKeyboardButton("Выбрать вакансию");
-                button.setCallbackData(callbackData);
-                List<InlineKeyboardButton> row = new ArrayList<>();
-                row.add(button);
-                List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
-                keyboard.add(row);
-                keyboardMarkup.setKeyboard(keyboard);
+        boolean isUserRegistered = isUserRegistered(chatId);
+        if (isUserRegistered) {
+            if (!vacancies.isEmpty()) {
+                for (Vacancy vacancy : vacancies) {
+                    String callbackData = "select_vacancy_" + vacancy.getVacancyId();
+                    InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+                    InlineKeyboardButton button = new InlineKeyboardButton("Выбрать вакансию");
+                    button.setCallbackData(callbackData);
+                    List<InlineKeyboardButton> row = new ArrayList<>();
+                    row.add(button);
+                    List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+                    keyboard.add(row);
+                    keyboardMarkup.setKeyboard(keyboard);
 
-                StringBuilder vacancyText = new StringBuilder();
-                vacancyText.append("ID: ").append(vacancy.getVacancyId()).append("\n")
-                        .append("Название вакансии: ").append(vacancy.getJobTitle()).append("\n")
-                        .append("Описание: ").append(vacancy.getProjectDescription()).append("\n")
-                        .append("Обязанности: ").append(vacancy.getResponsibilities()).append("\n")
-                        .append("Требования: ").append(vacancy.getRequirements()).append("\n\n\n");
-                sendMessageWithInlineKeyboard(chatId, vacancyText.toString(), keyboardMarkup);
+                    StringBuilder vacancyText = new StringBuilder();
+                    vacancyText.append("ID: ").append(vacancy.getVacancyId()).append("\n")
+                            .append("Название вакансии: ").append(vacancy.getJobTitle()).append("\n")
+                            .append("Описание: ").append(vacancy.getProjectDescription()).append("\n")
+                            .append("Обязанности: ").append(vacancy.getResponsibilities()).append("\n")
+                            .append("Требования: ").append(vacancy.getRequirements()).append("\n\n\n");
+                    sendMessageWithInlineKeyboard(chatId, vacancyText.toString(), keyboardMarkup);
+                }
+                log.info("The user requested vacancies list: " + chatId);
+            } else {
+                sendMessage(chatId, "На данный момент вакансий нет, пожалуйста, оставайтесь на связи и проверяйте список, они обязательно появятся!");
+                log.info("The user requested vacancies list, no available vacancies now: " + chatId);
             }
-            log.info("The user requested vacancies list: " + chatId);
         } else {
-            sendMessage(chatId, "На данный момент вакансий нет, пожалуйста, оставайтесь на связи и проверяйте список, они обязательно появятся!");
-            log.info("The user requested vacancies list, no available vacancies now: " + chatId);
+            String registrationMessage = "Для доступа к списку вакансий, пожалуйста, зарегистрируйтесь.";
+            sendMessage(chatId, registrationMessage);
+            log.info("User is not registered, prompting for registration: " + chatId);
         }
     }
     public void sendMessageWithInlineKeyboard(long chatId, String text, InlineKeyboardMarkup keyboardMarkup) {
@@ -351,6 +359,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             log.info("Can't find vacancy " + chatId);
         }
     }
+
     private void register(long chatId) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
@@ -403,17 +412,17 @@ public class TelegramBot extends TelegramLongPollingBot {
                 long targetChatId = Long.parseLong(commandParts[1]);
                 String firstName = message.getChat().getFirstName();
                 String userName = message.getChat().getUserName();
-                addToBlackList(targetChatId, firstName, userName);
+                addToBlackList(message, targetChatId, firstName, userName);
             } catch (NumberFormatException e) {
-                sendMessage(config.getOwnerId(), "Неверный формат ID пользователя.");
+                sendMessage(message.getChatId(), "Неверный формат ID пользователя.");
                 log.error("wrong format ID " + e);
             }
         } else {
-            sendMessage(config.getOwnerId(), "Неправильное количество параметров команды.");
+            sendMessage(message.getChatId(), "Неправильное количество параметров команды.");
             log.error("wrong format of command ");
         }
     }
-    public void addToBlackList(Long chatId, String firstName, String userName) {
+    public void addToBlackList(Message message, Long chatId, String firstName, String userName) {
         Optional<BlackList> existingUser = blackListRepository.findByChatId(chatId);
         if (!existingUser.isPresent()) {
             BlackList blackListUser = new BlackList();
@@ -422,21 +431,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             blackListUser.setFirstName(firstName);
             blackListUser.setUserName(userName);
             blackListRepository.save(blackListUser);
-            sendMessage(config.getOwnerId(), "пользоавтель " + chatId+ " добавлен в black list");
+            sendMessage(message.getChatId(), "пользоавтель " + chatId+ " добавлен в black list");
             log.info("The user added to Black list: " + chatId);
         }
         else {
-            sendMessage(config.getOwnerId(), "Пользователь с ID " + chatId + " уже находится в черном списке.");
+            sendMessage(message.getChatId(), "Пользователь с ID " + chatId + " уже находится в черном списке.");
             log.info("trying to doubleadd to blacklist " + chatId);
         }
     }
-    public void removeFromBlackList(long chatId) {
+    public void removeFromBlackList(Message message, long chatId) {
         Optional<BlackList> existingUser = blackListRepository.findByChatId(chatId);
         if (existingUser.isPresent()) {
             blackListRepository.delete(existingUser.get());
-            sendMessage(config.getOwnerId(), "Пользователь с ID " + chatId + " был удален из черного списка.");
+            sendMessage(message.getChatId(), "Пользователь с ID " + chatId + " был удален из черного списка.");
         } else {
-            sendMessage(config.getOwnerId(), "Пользователь с ID " + chatId + " не находится в черном списке.");
+            sendMessage(message.getChatId(), "Пользователь с ID " + chatId + " не находится в черном списке.");
         }
     }
     public void processRemoveFromBlackListCommand(Message message) {
@@ -444,14 +453,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (commandParts.length == 2) {
             try {
                 long targetChatId = Long.parseLong(commandParts[1]);
-                removeFromBlackList(targetChatId);
+                removeFromBlackList(message, targetChatId);
                 log.info("The user removed from Black list: " + targetChatId);
             } catch (NumberFormatException e) {
-                sendMessage(config.getOwnerId(), "Неверный формат ID пользователя.");
+                sendMessage(message.getChatId(), "Неверный формат ID пользователя.");
                 log.error("wrong format ID " + e);
             }
         } else {
-            sendMessage(config.getOwnerId(), "Неправильное количество параметров команды.");
+            sendMessage(message.getChatId(), "Неправильное количество параметров команды.");
             log.error("wrong format of command ");
         }
     }

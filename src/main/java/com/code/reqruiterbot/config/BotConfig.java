@@ -6,6 +6,10 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 @Configuration
 @Data
 @PropertySource("application.properties")
@@ -15,6 +19,11 @@ public class BotConfig {
     String botName;
     @Value("${bot.token}")
     String token;
-    @Value("${bot.owner}")
-    Long ownerId;
+    @Value("${bot.owner.1}")
+    private Long owner1;
+    @Value("${bot.owner.2}")
+    private Long owner2;
+    public List<Long> getBotOwners() {
+        return Arrays.asList(owner1, owner2);
+    }
 }
