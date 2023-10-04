@@ -47,7 +47,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             Давай вместе найдем для тебя идеальное место в нашей команде! \uD83D\uDE80""";
     private final Map<Long, Long> lastMessageTimes = new ConcurrentHashMap<>();
     private final Map<Long, Integer> messageCountPerMinute = new ConcurrentHashMap<>();
-    private long currentRecruiterChatId = -1;
+    private Map<Long, Long> userRecruiterChatMap = new HashMap<>();
 
     @Autowired
     public TelegramBot(BotConfig config, BlackListRepository blackListRepository, VacancyRepository vacancyRepository, UserRepository userRepository) {
@@ -203,15 +203,15 @@ public class TelegramBot extends TelegramLongPollingBot {
                     saveFileLocally(localFile, savePath, chatId);
 
                     // Проверяем, есть ли значения для currentRecruiterChatId, fileId и fileName
-                    if (currentRecruiterChatId > 0 && fileId != null && fileName != null) {
-                        // Отправляем файл рекрутеру
-                        sendFileToRecruiter(currentRecruiterChatId, fileId, fileName);
+                    Long recruiterChatId = userRecruiterChatMap.get(chatId);
+                    if (recruiterChatId != null && fileId != null && fileName != null) {
+                        sendFileToRecruiter(recruiterChatId, fileId, fileName, chatId);
                     } else {
                         sendMessage(chatId, "Произошла ошибка при отправке файла.");
                     }
                 } catch (TelegramApiException | IOException e) {
-                    log.error("Exception thrown while sending file to recruiter: " + e);
-                    sendMessage(chatId, "Произошла ошибка при отправке файла.");
+                    log.error("Try to upload copy of resume: " + e);
+                    sendMessage(chatId, "Ваше резюме уже есть в базе");
                 }
             } else {
                 sendMessage(chatId, "Формат файла не поддерживается. Поддерживаемые форматы: PDF, DOC, DOCX, JPEG, JPG");
@@ -220,6 +220,20 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else {
             sendMessage(chatId, "Файл слишком большой. Максимальный размер файла: 10 МБ");
             log.error("User " + chatId + " tried to upload a file > 10 Mb");
+        }
+    }
+
+    private void sendFileToRecruiter(long recruiterChatId, String fileId, String fileName, long chatId) {
+        SendDocument sendDocument = new SendDocument();
+        sendDocument.setChatId(Long.toString(recruiterChatId));
+        InputFile inputFile = new InputFile(fileId);
+        sendDocument.setDocument(inputFile);
+        sendDocument.setCaption(fileName);
+        try {
+            execute(sendDocument);
+            log.info("Resume sent to recruiter successfully");
+        } catch (TelegramApiException e) {
+            log.error("Exception thrown while sending to recruiter: " + e);
         }
     }
     private String getFileExtension(String fileName) {
@@ -271,8 +285,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         fileInputStream.close();
         log.info("Resume sended by user and downloaded sucsessfully" + chatId);
     }
-    private void sendFileToRecruiter(long recruiterChatId, String fileId, String fileName) {
+    private void sendFileToRecruiter(long chatId, String fileId, String fileName) {
         SendDocument sendDocument = new SendDocument();
+        Long recruiterChatId = userRecruiterChatMap.get(chatId); // Получаем recruiterChatId из мапы
+        if (recruiterChatId == null) {
+            log.error("Recruiter chatId not found for user: " + chatId);
+            // Обработка случая, если recruiterChatId не найден
+            return;
+        }
         sendDocument.setChatId(Long.toString(recruiterChatId));
         InputFile inputFile = new InputFile(fileId);
         sendDocument.setDocument(inputFile);
@@ -344,7 +364,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             long recruiterChatId = vacancy.getRecruiterChatId();
             log.info("Recruiter's chatId got " + recruiterChatId);
             if (recruiterChatId > 0) {
-                currentRecruiterChatId = recruiterChatId; // Устанавливаем значение currentRecruiterChatId
+                userRecruiterChatMap.put(chatId, recruiterChatId); // Сохраняем recruiterChatId в мапу
                 String responseMessage = "Пожалуйста, отправьте свое резюме, и я передам его рекрутеру.";
                 sendMessage(chatId, responseMessage);
                 log.info("Pushed button by user " + chatId);
