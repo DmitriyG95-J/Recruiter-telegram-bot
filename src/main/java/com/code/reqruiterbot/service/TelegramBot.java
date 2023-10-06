@@ -231,6 +231,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         sendDocument.setCaption(fileName);
         try {
             execute(sendDocument);
+            sendMessage(chatId, "Ваше резюме успешно отправлено рекрутеру. Вам обязательно дадут обратную связь!");
             log.info("Resume sent to recruiter successfully");
         } catch (TelegramApiException e) {
             log.error("Exception thrown while sending to recruiter: " + e);
