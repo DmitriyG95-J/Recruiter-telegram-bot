@@ -285,25 +285,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         fileInputStream.close();
         log.info("Resume sended by user and downloaded sucsessfully" + chatId);
     }
-    private void sendFileToRecruiter(long chatId, String fileId, String fileName) {
-        SendDocument sendDocument = new SendDocument();
-        Long recruiterChatId = userRecruiterChatMap.get(chatId); // Получаем recruiterChatId из мапы
-        if (recruiterChatId == null) {
-            log.error("Recruiter chatId not found for user: " + chatId);
-            // Обработка случая, если recruiterChatId не найден
-            return;
-        }
-        sendDocument.setChatId(Long.toString(recruiterChatId));
-        InputFile inputFile = new InputFile(fileId);
-        sendDocument.setDocument(inputFile);
-        sendDocument.setCaption(fileName);
-        try {
-            execute(sendDocument);
-            log.info("Resume sent to recruiter successfully");
-        } catch (TelegramApiException e) {
-            log.error("Exception thrown while sending to recruiter: " + e);
-        }
-    }
     private boolean isUserRegistered(long chatId) {
         User user = userRepository.findByChatId(chatId);
         return user != null;
