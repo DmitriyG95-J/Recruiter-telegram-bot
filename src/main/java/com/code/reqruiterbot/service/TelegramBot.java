@@ -199,7 +199,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (supportedExtensions.contains(fileExtension.toLowerCase())) {
                 try {
                     java.io.File localFile = getFileInfoAndDownload(fileId);
-                    String savePath = "D:/CV from reqbot/" + fileName;
+                    String savePath = "C:/CV from reqBot/" + fileName;
                     saveFileLocally(localFile, savePath, chatId);
 
                     // Проверяем, есть ли значения для currentRecruiterChatId, fileId и fileName
@@ -284,7 +284,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         java.nio.file.Path localFilePath = java.nio.file.Paths.get(localPath);
         java.nio.file.Files.copy(fileInputStream, localFilePath);
         fileInputStream.close();
-        log.info("Resume sended by user and downloaded sucsessfully" + chatId);
+        log.info("Resume sended by user and downloaded sucsessfully" + localFilePath + " for chatId: " + chatId);
     }
     private boolean isUserRegistered(long chatId) {
         User user = userRepository.findByChatId(chatId);
